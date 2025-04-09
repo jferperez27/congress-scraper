@@ -9,27 +9,34 @@ html = driver.page_source
 
 ## Parses the HTML with BeautifulSoup.
 soup = BeautifulSoup(html, 'html.parser')
-bill_title = soup.find_all(class_='result-heading')  # Find all the search result items  
-bill_desc = soup.find_all(class_='result-title')  # Find all the search result items
-bill_status = soup.find_all(class_='result-item result-tracker')
+bill_title = soup.find_all(class_='result-heading') # Bill title, number, congressional session
+bill_desc = soup.find_all(class_='result-title') # Bill description
+bill_status = soup.find_all(class_='result-item result-tracker') # Bill status
 
-increment = 0
-current_count = 0
 
-## Loops through the search results and prints out the title and description of each bill.
-for title in bill_title:
-    title_formatted = title.text.split('— ')  # Split the title string to remove "-" and keep the rest
-    if (increment % 2 == 0):
-        status_formatted = bill_status[current_count].text.split('Here')[0].strip()  # Split the status string to remove "-" and keep the rest
-        status_only = status_formatted.split("status ")[1]
-        print("------------------------------------------------")
-        print("Congresional Session: ")
-        print(title_formatted[1])
-        print("Bill Type & Number: ")
-        print(title_formatted[0])
-        print("Bill Description: ")
-        print(bill_desc[increment].text.strip())
-        print("Bill Status: ")
-        print(status_only)
-        current_count += 1
-    increment += 1
+def parse_simple_data():
+    """
+    Parses the HTML data and prints out the title, description, and status of each bill.
+    """
+    increment = 0 # Skips every second bill title to get "expanded view" of the bill
+    current_count = 0 # To reference the current iteration of bill description and status
+
+    ## Loops through the search results and prints out the title and description of each bill.
+    for title in bill_title:
+        title_formatted = title.text.split('— ')
+        if (increment % 2 == 0):
+            status_formatted = bill_status[current_count].text.split('Here')[0].strip()
+            status_only = status_formatted.split("status ")[1]
+            print("------------------------------------------------")
+            print("Congresional Session: ")
+            print(title_formatted[1])
+            print("Bill Type & Number: ")
+            print(title_formatted[0])
+            print("Bill Description: ")
+            print(bill_desc[increment].text.strip())
+            print("Bill Status: ")
+            print(status_only)
+            current_count += 1
+        increment += 1
+
+parse_simple_data()
