@@ -39,4 +39,10 @@ def parse_simple_data():
             current_count += 1
         increment += 1
 
-parse_simple_data()
+#parse_simple_data()
+
+def get_first_bill_heading():
+    formatted = bill_title[0].text.split('- ')
+    return formatted[0]
+
+print(get_first_bill_heading())
