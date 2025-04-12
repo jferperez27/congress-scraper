@@ -17,3 +17,4 @@ This program implements the Selenium WebDriver API to access and parse the HTML 
   [...] Ensure no outliers in DataFrame, clean data as necessary, format data to proper types
   
   [...] Export Pandas DataFrame Object into an Excel file
+

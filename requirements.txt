@@ -2,3 +2,5 @@ selenium
 beautifulsoup4
 requests
 pytest
+pandas
+openpyxl
