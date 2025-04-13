@@ -1,17 +1,29 @@
 from bs4 import BeautifulSoup
 from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
-## Prompts Selenium to navigate to the first page of Congress.gov results for the 119th Congress, scrapes the HTML under the "html" variable.
-url = "https://www.congress.gov/search?q=%7B%22source%22%3A%22legislation%22%2C%22search%22%3A%22congressId%3A113+AND+billStatus%3A%5C%22Introduced%5C%22%22%7D"
 
-def scrape_html():
+def scrape_html(url : str):
     driver = webdriver.Chrome()
     driver.get(url)
+    try:
+        # Wait until the results section loads (adjust class if needed)
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "next"))
+        )
+    except:
+        print("Timeout waiting for page to load.")
+        print("Attempting to retry...")
+        driver.quit()    
+        return scrape_html(url)
     html = driver.page_source
+    driver.quit()
     return html
 
-def get_soup():
-    return BeautifulSoup(scrape_html(), 'html.parser')
+def get_soup(url : str):
+    return BeautifulSoup(scrape_html(url), 'html.parser')
 
 def parse_simple_data(bill_titles, bill_desc, bill_status):
     """
@@ -49,7 +61,8 @@ def parse_simple_data(bill_titles, bill_desc, bill_status):
     return data    
 
 def get_first_bill_heading():
-    soup = get_soup()
+    url = "https://www.congress.gov/search?q=%7B%22source%22%3A%22legislation%22%2C%22search%22%3A%22congressId%3A113+AND+billStatus%3A%5C%22Introduced%5C%22%22%7D"
+    soup = get_soup(url)
     bill_title = soup.find_all(class_='result-heading') # Bill title, number, congressional session
     formatted = bill_title[0].text.split('- ')
     return formatted[0]
@@ -61,7 +74,7 @@ def get_first_bill_heading():
 #     bill_status = soup.find_all(class_='result-item result-tracker') # Bill status
 #     parse_simple_data(bill_title, bill_desc, bill_status)
 
-def get_simple_data_dict() -> dict:
+def get_simple_data_dict(soup : BeautifulSoup, count : int) -> dict:
     data_dict = {
         "Count" : [],
         "Congressional Session" : [],
@@ -69,7 +82,7 @@ def get_simple_data_dict() -> dict:
         "Bill Description" : [],
         "Bill Status" : []
     }
-    soup = get_soup()
+    #soup = get_soup(url)
     bill_title = soup.find_all(class_='result-heading') # Bill title, number, congressional session
     bill_desc = soup.find_all(class_='result-title') # Bill description
     bill_status = soup.find_all(class_='result-item result-tracker') # Bill status
@@ -80,7 +93,7 @@ def get_simple_data_dict() -> dict:
     # - bill number/type
     # - congressional session
 
-    count = 1
+    count = count
     for data in data_list:
         data_dict["Count"].append(str(count))
         data_dict["Congressional Session"].append(data[3])
@@ -89,4 +102,17 @@ def get_simple_data_dict() -> dict:
         data_dict["Bill Status"].append(data[0])
         count += 1
     return data_dict
+
+
+def find_next_button(soup : BeautifulSoup):
+    #soup = get_soup(url)
+    button_element = soup.find_all(class_= 'next')
+    
+    if not button_element:
+        print(soup)
+        print('no further pages to search ... ending retrieval')
+        return None
+    button_link = button_element[0].get('href')
+    print(button_link)
+    return button_link
 
