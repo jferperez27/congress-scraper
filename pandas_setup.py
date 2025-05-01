@@ -1,5 +1,5 @@
 import pandas as pd
-import main as m
+import data_fetch_parse as m
 import time
 import re
 
@@ -29,7 +29,7 @@ def clean_excel_string(value):
     return value
 
 def get_113th_congress_spreadsheet():
-    current_URL = "https://www.congress.gov/search?q=%7B%22source%22%3A%22legislation%22%2C%22search%22%3A%22congressId%3A113+AND+billStatus%3A%5C%22Introduced%5C%22%22%7D&pageSize=250"
+    current_URL = "https://www.congress.gov/search?q=%7B%22source%22%3A%22legislation%22%2C%22search%22%3A%22congressId%3A113+AND+billStatus%3A%5C%22Introduced%5C%22%22%7D&pageSize=25"
     dataframe_container = []
     final_page = False
     current_count = 0
@@ -37,10 +37,15 @@ def get_113th_congress_spreadsheet():
     while final_page != True :
         current_soup = m.get_soup(current_URL)
         #time.sleep(3)
-        page_data_dict = m.get_simple_data_dict(current_soup, current_count)
+        page_data_dict = m.get_full_data_dict(current_soup, current_count)
+        
+        for key in page_data_dict.keys():
+            print(len(page_data_dict[key]))
+
         page_dataframe = pd.DataFrame(page_data_dict)
         dataframe_container.append(page_dataframe)
 
+        """
         next_page = m.find_next_button(current_soup)
         if not next_page:
             final_page = True
@@ -48,9 +53,13 @@ def get_113th_congress_spreadsheet():
             current_URL = "https://www.congress.gov" + next_page
 
         current_count += len(page_dataframe)    
+        """
+
+        ## REMOVE BELOW TO RETAIN RECURSION -- UNCOMMENT ANY OTHER LINES OF CODE ABOVE
+        final_page = True
 
     merge_data = pd.concat(dataframe_container)    
-    merge_data["Bill Description"] = merge_data["Bill Description"].apply(clean_excel_string)
+    merge_data["Bill Title"] = merge_data["Bill Title"].apply(clean_excel_string)
 
     print(len(merge_data))      
     merge_data.to_excel("congress_bills.xlsx", index=False)
