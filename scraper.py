@@ -53,12 +53,23 @@ class DataScrape:
         options = Options()
         if self.headless:
             options.add_argument("--headless=new")
-            options.add_argument("user-agent=" + self.agent)
-        prefs = {"profile.managed_default_content_settings.images": 2,
-                "profile.managed_default_content_settings.stylesheets": 2,
-                "profile.managed_default_content_settings.fonts": 2}
-        options.add_experimental_option("prefs", prefs)
-        return webdriver.Chrome(options=options)
+            options.add_argument("--window-size=1920,1080")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+            options.add_argument(f"user-agent={self.agent}")
+
+        driver = webdriver.Chrome(options=options)
+
+        try:
+            driver.execute_cdp_cmd("Network.setBlockedURLs", {
+                "urls": ["*.pdf", "*.js", "*.css", "*.woff", "*.ttf", "*.svg", "*/embed/*", "*/viewer*", "*.mp4"]
+            })
+            driver.execute_cdp_cmd("Network.enable", {})
+        except Exception as e:
+            print("CDP command failed (maybe not in headless mode):", e)
+
+        return driver
     
     def setup_driver(self):
         self.driver.execute_cdp_cmd("Network.setBlockedURLs", {
@@ -69,45 +80,45 @@ class DataScrape:
         """
         Uses Selenium API to open Chromium and fetch HTML data, returns HTML.
         """
-        self.driver.set_page_load_timeout(5)
+        self.driver.set_page_load_timeout(10)
 
         while True:
         ## Waits for page to fully load before scraping HTML
             try:
+                self.driver.set_page_load_timeout(5)
                 self.driver.get(url)
 
-                # Wait until the results section loads or overview (adjust class if needed)
-                WebDriverWait(self.driver, 5).until(
-                    EC.any_of(
-                    EC.presence_of_element_located((By.CLASS_NAME, "next")), 
-                    EC.presence_of_element_located((By.CLASS_NAME, "overview_label")))
-                )
-            
-                main = self.driver.current_window_handle
-                for windows in self.driver.window_handles:
-                    if windows != main:
-                        self.driver.switch_to.window(windows)
-                        self.driver.close()
-                        self.driver.delete_all_cookies()
-                self.driver.switch_to.window(main)
+                self.driver.execute_script("""
+                const iframes = document.querySelectorAll('iframe');
+                iframes.forEach(iframe => iframe.remove());
+                """)
 
-                ## Scrapes HTML, quits Selenium (Chromium)
+                # Wait for basic content (not full JS load)
+                WebDriverWait(self.driver, 7).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
+
                 html = self.driver.page_source
-                #self.driver.quit()
+
+                # Track how many pages you've scraped
                 self.scrape_count += 1
-                if self.scrape_count == 10:
+                if self.scrape_count >= 10:
+                    print("🔁 Restarting browser after 10 pages...")
                     self.driver.quit()
                     self.driver = self._init_driver()
-                    self.setup_driver()
                     self.scrape_count = 0
+
                 return html
-            except:
-                print("Timeout waiting for page to load.")
-                print("Attempting to retry...")
-                self.driver.refresh()
-                #self.driver.quit()    
-                #self.driver = self._init_driver()
-                #time.sleep(3)
+
+            except Exception as e:
+                print(f"⚠️ Error loading {url}: {e}")
+                time.sleep(2)
+                print("🔄 Restarting driver after failure...")
+                try:
+                    self.driver.quit()
+                except:
+                    pass
+                self.driver = self._init_driver()
 
     def get_soup(self, url : str):
         """
@@ -199,7 +210,13 @@ class DataScrape:
     def get_bill_text(self, text_url : str) -> str:
         soup = self.get_soup(text_url)
         text_container = soup.find(class_='cdg-summary-wrapper-list')
+        version = soup.find(class_='cdg-summary-wrapper')
         text = None
+
+
+        if version != "There is one version of the bill.":
+            print("Multiple versions detected")
+
         for link in text_container.find_all('a'):
             #print(link.text.strip())
             if "TXT" in link.text.strip():
@@ -212,7 +229,9 @@ class DataScrape:
             print("Bill Text Successfully found")
         else:
             print("ERROR: BILL TEXT NOT FOUND")
-            bill_text = "No Bill Text Found"
+            if soup.find('embed'):
+                print("PDF FOUND, NOT TEXT FILE IDK WHAT TO DO NEXT " + text_url)
+            bill_text = "Bill Text could not be parsed, link: " + text_url
         return bill_text
 
     def get_full_data_dict(self, soup : BeautifulSoup, count : int, sleep : int) -> dict:
