@@ -5,6 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from collections import deque
+import time
 import requests
 
 class UserAgent:
@@ -175,7 +176,7 @@ class DataScrape:
 
         return output
 
-    def get_full_data_dict(self, soup : BeautifulSoup, count : int) -> dict:
+    def get_full_data_dict(self, soup : BeautifulSoup, count : int, sleep : int) -> dict:
         """
         Creates a dictionary with all data. Using BeautifulSoup to traverse the HTML
         data scraped using Selenium, the function searches for all specified data in 
@@ -213,6 +214,7 @@ class DataScrape:
 
         count = count
         for data in data_list:
+            time.sleep(sleep)
             current_url = bill_urls.popleft()
             expanded_data = self.get_additional_info_ex(current_url)
             data_dict["Count"].append(str(count))
@@ -253,6 +255,8 @@ class DataScrape:
 
     def fetch_info(self):
         return self.get_additional_info_ex("https://www.congress.gov/bill/113th-congress/senate-bill/1800/cosponsors?s=1&r=3&q=%7B%22search%22%3A%22congressId%3A113+AND+billStatus%3A%5C%22Introduced%5C%22%22%7D")
+
+
 if __name__ == "__main__":
     # Example usage of DataScrape
     scraper = DataScrape(headless=True, agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
