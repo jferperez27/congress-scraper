@@ -38,4 +38,5 @@ def start_program():
         else:
              headless = False
 
-        processor.Processor(waitTime, headless)
+        start = processor.Processor(waitTime, headless)
+        start.start_processing()
