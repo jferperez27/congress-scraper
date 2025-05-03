@@ -231,6 +231,10 @@ class DataScrape:
             print("ERROR: BILL TEXT NOT FOUND")
             if soup.find('embed'):
                 print("PDF FOUND, NOT TEXT FILE IDK WHAT TO DO NEXT " + text_url)
+                bill_versions = soup.find_all("std-select")
+                for v in bill_versions:
+                    if "Public Law" in v.text.strip():
+                        
             bill_text = "Bill Text could not be parsed, link: " + text_url
         return bill_text
 
