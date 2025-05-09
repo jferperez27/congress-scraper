@@ -19,8 +19,8 @@ class UserAgent:
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "corset")))
         except:
-            print("Timeout waiting for page to load.")
-            print("Attempting to retry...")
+            print("! - Timeout waiting for page to load.")
+            print("! - Attempting to retry...")
             driver.quit()    
             return self.getUserAgents()
     
@@ -70,7 +70,7 @@ class DataScrape:
             })
             driver.execute_cdp_cmd("Network.enable", {})
         except Exception as e:
-            print("CDP command failed (maybe not in headless mode):", e)
+            print("! - CDP command failed (maybe not in headless mode):", e)
 
         return driver
     
@@ -88,7 +88,7 @@ class DataScrape:
         while True:
         ## Waits for page to fully load before scraping HTML
             try:
-                self.driver.set_page_load_timeout(35)
+                self.driver.set_page_load_timeout(10)
                 self.driver.get(url)
 
                 self.driver.execute_script("""
@@ -97,7 +97,7 @@ class DataScrape:
                 """)
 
                 # Wait for basic content (not full JS load)
-                WebDriverWait(self.driver, 35).until(
+                WebDriverWait(self.driver, 10).until(
                     EC.presence_of_element_located((By.TAG_NAME, "body"))
                 )
 
@@ -114,9 +114,9 @@ class DataScrape:
                 return html
 
             except Exception as e:
-                print(f"⚠️ Error loading {url}: {e}")
+                print(f"! - ⚠️ Error loading {url}: {e}")
                 time.sleep(2)
-                print("🔄 Restarting driver after failure...")
+                print("! - 🔄 Restarting driver after failure...")
                 try:
                     self.driver.quit()
                 except:
@@ -171,8 +171,9 @@ class DataScrape:
         """
         output = []
         url = bill_page
-        print(bill_page)
+        print("LOG FOR: " + bill_page)
         soup = self.get_soup(url)
+        summary_list = []
 
         sponsor = soup.find(class_='standard01')
         rep_sen = sponsor.find("a").text.strip() # Sponsor
@@ -183,10 +184,9 @@ class DataScrape:
         cosponsor_tab = tabs[5] # Tab with Bill Cosponsor URL
         bill_text_url = "https://www.congress.gov" + text_tab['href']
         cosponsor_url = "https://www.congress.gov" + cosponsor_tab['href']
-        #print(bill_text_url)
-        #print(cosponsor_url)
-        has_no_cosponsors = "Cosponsors (0)" in cosponsor_tab.text.strip() # Boolean : if there are no cosponsors
-        #print(has_no_cosponsors)
+        print("---" + cosponsor_url)
+        has_cosponsors = "Cosponsors (0)" not in cosponsor_tab.text.strip() # Boolean : if there are no cosponsors
+        print("---" + "Cosponsors Found: " + str(has_cosponsors))
 
 
 
@@ -208,18 +208,42 @@ class DataScrape:
 
         output.append(self.get_bill_text_link(bill_text_url))
 
+        if has_cosponsors:
+            output.append(self.get_cosponsor(cosponsor_url))
+        else:
+            output.append('No Cosponsors')
+
+        summary_container = soup.find_all(class_='main-wrapper')
+        for x in summary_container:
+            if x.find(class_="cdg-summary-wrapper"):
+                summary = x.find_all('p')
+                for x in summary:
+                    summary_list.append(x.text.strip())
+        summary_str = '\n\n'.join(summary_list)
+        output.append(summary_str)
+
         return output
+    
+    def get_cosponsor(self, cosponsor_url : str) -> str:
+        #cosponsor_list = []
+
+        soup = self.get_soup(cosponsor_url)
+        cosponsor_table = soup.find(class_='item_table')
+
+        if cosponsor_table:
+            return cosponsor_table.text.strip()
+        else:
+            return 'No Cosponsors were able to be found ... Cosponsor URL : ' + cosponsor_url
     
     def get_bill_text_link(self, text_url : str) -> str:
         soup = self.get_soup(text_url)
         text_container = soup.find(class_='cdg-summary-wrapper-list')
-        #print(text_container)
         version = soup.find(class_='cdg-summary-wrapper')
         text = None
 
 
         if version != "There is one version of the bill.":
-            print("Multiple versions detected")
+            print("---" + "Multiple versions detected")
 
         for link in text_container.find_all('a'):
             if "TXT" in link.text.strip():
@@ -232,23 +256,23 @@ class DataScrape:
             text_soup = self.get_soup(text)
             text_container = text_soup.find(class_="main-wrapper bill-text-wrapper")
             bill_text = text_container.find('pre').text.strip()
-            print("Bill Text Successfully found")
+            print("---" + "Bill Text Successfully found")
             return bill_text
 
         
-        print("ERROR: BILL TEXT NOT FOUND")
+        print("---" + "ERROR: BILL TEXT NOT FOUND")
         if original_url == "DO NOT LOOP":
             return "Could not find TXT file, last url accessed: " + text
         
         if soup.find('embed'):
-            print("PDF FOUND, NOT TEXT FILE IDK WHAT TO DO NEXT " + original_url)
+            print("---" + "PDF FOUND, NOT TEXT FILE IDK WHAT TO DO NEXT " + original_url)
             bill_versions = soup.find_all(class_="std-select")
             for v in bill_versions:
                 if "Public Law" in v.text.strip():
                     public_law_container = v.find('option', string=lambda t: t and 'Public Law' in t)
                     if public_law_container:
                         possible_text_link = "https://www.congress.gov" + public_law_container['value']
-                        print('Found possible text link ... attempting to retry with new link: ' + possible_text_link)
+                        print("---" + 'Found possible text link ... attempting to retry with new link: ' + possible_text_link)
                         return self.retrieve_bill_text(possible_text_link, "DO NOT LOOP", soup)
                 
         bill_text = "Bill Text could not be parsed"
@@ -272,8 +296,8 @@ class DataScrape:
             "Bill Type & Number" : [],
             "Bill Title" : [],
             "Bill Sponsor" : [],
-            #"Bill Co-Sponsor(s)" : [],
-            #"Bill Summary" : [],
+            "Bill Co-Sponsor(s)" : [],
+            "Bill Summary" : [],
             "Bill Committee" : [],
             "Bill Status" : [],
             "Text of Bill" : []
@@ -300,6 +324,8 @@ class DataScrape:
             data_dict["Bill Type & Number"].append(data[2])
             data_dict["Bill Title"].append(data[1])
             data_dict["Bill Sponsor"].append(expanded_data[0])
+            data_dict["Bill Co-Sponsor(s)"].append(expanded_data[3])
+            data_dict["Bill Summary"].append(expanded_data[4])
             data_dict["Bill Committee"].append(expanded_data[1])
             data_dict["Bill Status"].append(data[0])
             data_dict["Text of Bill"].append(expanded_data[2])
