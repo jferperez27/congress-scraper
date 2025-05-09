@@ -57,6 +57,9 @@ class DataScrape:
             options.add_argument("--disable-gpu")
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
+            options.add_argument('--disable-extensions')
+            options.add_argument("--disable-software-rasterizer")
+            options.add_argument("--blink-settings=imagesEnabled=false")
             options.add_argument(f"user-agent={self.agent}")
 
         driver = webdriver.Chrome(options=options)
@@ -85,7 +88,7 @@ class DataScrape:
         while True:
         ## Waits for page to fully load before scraping HTML
             try:
-                self.driver.set_page_load_timeout(5)
+                self.driver.set_page_load_timeout(35)
                 self.driver.get(url)
 
                 self.driver.execute_script("""
@@ -94,7 +97,7 @@ class DataScrape:
                 """)
 
                 # Wait for basic content (not full JS load)
-                WebDriverWait(self.driver, 7).until(
+                WebDriverWait(self.driver, 35).until(
                     EC.presence_of_element_located((By.TAG_NAME, "body"))
                 )
 
@@ -203,13 +206,14 @@ class DataScrape:
 
             count += 1
 
-        output.append(self.get_bill_text(bill_text_url))
+        output.append(self.get_bill_text_link(bill_text_url))
 
         return output
     
-    def get_bill_text(self, text_url : str) -> str:
+    def get_bill_text_link(self, text_url : str) -> str:
         soup = self.get_soup(text_url)
         text_container = soup.find(class_='cdg-summary-wrapper-list')
+        #print(text_container)
         version = soup.find(class_='cdg-summary-wrapper')
         text = None
 
@@ -218,24 +222,36 @@ class DataScrape:
             print("Multiple versions detected")
 
         for link in text_container.find_all('a'):
-            #print(link.text.strip())
             if "TXT" in link.text.strip():
                 text = "https://www.congress.gov" + link['href']
+                return self.retrieve_bill_text(text, text_url, soup)
+        return self.retrieve_bill_text(None, text_url, soup)
 
+    def retrieve_bill_text(self, text : str, original_url : str, soup : BeautifulSoup) -> str:
         if text:
             text_soup = self.get_soup(text)
             text_container = text_soup.find(class_="main-wrapper bill-text-wrapper")
             bill_text = text_container.find('pre').text.strip()
             print("Bill Text Successfully found")
-        else:
-            print("ERROR: BILL TEXT NOT FOUND")
-            if soup.find('embed'):
-                print("PDF FOUND, NOT TEXT FILE IDK WHAT TO DO NEXT " + text_url)
-                bill_versions = soup.find_all("std-select")
-                for v in bill_versions:
-                    if "Public Law" in v.text.strip():
-                        
-            bill_text = "Bill Text could not be parsed, link: " + text_url
+            return bill_text
+
+        
+        print("ERROR: BILL TEXT NOT FOUND")
+        if original_url == "DO NOT LOOP":
+            return "Could not find TXT file, last url accessed: " + text
+        
+        if soup.find('embed'):
+            print("PDF FOUND, NOT TEXT FILE IDK WHAT TO DO NEXT " + original_url)
+            bill_versions = soup.find_all(class_="std-select")
+            for v in bill_versions:
+                if "Public Law" in v.text.strip():
+                    public_law_container = v.find('option', string=lambda t: t and 'Public Law' in t)
+                    if public_law_container:
+                        possible_text_link = "https://www.congress.gov" + public_law_container['value']
+                        print('Found possible text link ... attempting to retry with new link: ' + possible_text_link)
+                        return self.retrieve_bill_text(possible_text_link, "DO NOT LOOP", soup)
+                
+        bill_text = "Bill Text could not be parsed"
         return bill_text
 
     def get_full_data_dict(self, soup : BeautifulSoup, count : int, sleep : int) -> dict:
@@ -317,3 +333,7 @@ class DataScrape:
     def fetch_info(self):
         return self.get_additional_info_ex("https://www.congress.gov/bill/113th-congress/senate-bill/1800/cosponsors?s=1&r=3&q=%7B%22search%22%3A%22congressId%3A113+AND+billStatus%3A%5C%22Introduced%5C%22%22%7D")
 
+if __name__ == "__main__":
+    DS = DataScrape(False, "Mozilla/5.0 (Windows Phone 10.0; Android 6.0.1; Microsoft; RM-1152) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Mobile Safari/537.36 Edge/15.15254")
+    output = DS.get_bill_text_link("https://www.congress.gov/bill/113th-congress/house-bill/3608/text?s=1&r=58&q=%7B%22search%22%3A%22congressId%3A113+AND+billStatus%3A%5C%22Introduced%5C%22%22%7D")
+    print(output)
